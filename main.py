@@ -1,19 +1,27 @@
+import tkinter.messagebox
 from tkinter import *
 import pandas
 import random
 
-# read dict from csv
-to_learn = pandas.read_csv("./data/french_words.csv").to_dict(orient="records")
+PROGRESS_FILE_PATH = "./data/words_to_learn.csv"
+DATA_FILE_PATH = "./data/french_words.csv"
+BACKGROUND_COLOR = "#B1DDC6"
+
+to_learn = None
 
 current_card = None
-flip_timer= None
-# current_image = None
-BACKGROUND_COLOR = "#B1DDC6"
+flip_timer = None
 TIME_WAIT = 3000
 
 
-def get_random_dict():
-    return random.choice(to_learn)
+def load_data():
+    global to_learn
+    try:
+        # load previous progress
+        to_learn = pandas.read_csv(PROGRESS_FILE_PATH).to_dict(orient="records")
+    except (FileNotFoundError, pandas.errors.EmptyDataError) as e:
+        # load the flash data
+        to_learn = pandas.read_csv(DATA_FILE_PATH).to_dict(orient="records")
 
 
 def next_card():
@@ -21,17 +29,31 @@ def next_card():
     global flip_timer
     if flip_timer is not None:
         window.after_cancel(flip_timer)
-    current_card = get_random_dict()
-    canvas.itemconfig(canvas_image, image=card_front_img)
-    canvas.itemconfig(card_title, text="French", fill="black")
-    canvas.itemconfig(card_word, text=current_card["French"], fill="black")
-    flip_timer= window.after(TIME_WAIT, flip)
-    # flip_card()
+
+    if len(to_learn) == 0:
+        print("no more card")
+        tkinter.messagebox.showinfo(title="Congratulation", message = "You have learn all the word!  We will reset "
+                                                                      "the database for the full set of data")
+        load_data()
+        next_card()
+    else:
+        current_card = random.choice(to_learn)
+        canvas.itemconfig(canvas_image, image=card_front_img)
+        canvas.itemconfig(card_title, text="French", fill="black")
+        canvas.itemconfig(card_word, text=current_card["French"], fill="black")
+        flip_timer = window.after(TIME_WAIT, flip)
+
+def on_known_button_click():
+    # remove card from the list
+    to_learn.remove(current_card)
+
+    # save to csv
+    pandas.DataFrame.from_dict(to_learn).to_csv(PROGRESS_FILE_PATH, index=False)
+    next_card()  # flip to next card
 
 
-# def show_frech_card():
-#     canvas.itemconfig(card_title, text="French")
-#     canvas.itemconfig(card_word, text=current_card["French"])
+def on_unknown_button_click():
+    next_card()  # flip to next card
 
 
 def flip():
@@ -41,6 +63,7 @@ def flip():
     canvas.itemconfig(card_word, text=current_card["English"], fill="white")
 
 
+load_data()
 # create the ui
 window = Tk()
 window.title("Flashy")
@@ -60,12 +83,14 @@ canvas.config(bg=BACKGROUND_COLOR, highlightthickness=0)
 
 cross_image = PhotoImage(file="images/wrong.png")
 unknown_button = Button(image=cross_image, highlightthickness=0, highlightbackground=BACKGROUND_COLOR,
-                        command=next_card)
+                        command=on_unknown_button_click)
 unknown_button.grid(row=1, column=0)
 
 check_image = PhotoImage(file="images/right.png")
-known_button = Button(image=check_image, highlightthickness=0, highlightbackground=BACKGROUND_COLOR, command=next_card)
+known_button = Button(image=check_image, highlightthickness=0, highlightbackground=BACKGROUND_COLOR,
+                      command=on_known_button_click)
 known_button.grid(row=1, column=1)
+
 next_card()
 
 window.mainloop()
